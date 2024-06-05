@@ -6,9 +6,9 @@ class SamplerateError(Exception):
 class Decoder(srd.Decoder):
 	api_version = 3
 	id = 'arinc429'
-	name = '0:ARINC 429'
+	name = '0:ARINC 429 v2'
 	longname = 'ARINC 429'
-	desc = 'ARINC 429'
+	desc = 'ARINC 429 v2'
 	license = 'gplv2+'
 	inputs = ['logic']
 	outputs = ['arinc429']
@@ -34,14 +34,6 @@ class Decoder(srd.Decoder):
 		('annr_struct', 'Struct', (1, 2, 3, 4, 5, 6)),
 		('annr_phys', 'Value', (8,)),
 	)
-	#annotations = (
-	#	('0', '0'),
-	#	('1', '1'),
-	#)
-	#annotation_rows = (
-	#	('db1', 'Debug1', (0,)),
-	#	('db2', 'Debug2', (1,)),
-	#)
 	options = (
 		{'id': 'o_calc', 'desc': 'Calc value', 'default': 'No', 'values': ('Yes', 'No')},
 		{'id': 'o_addr', 'desc': 'Addr (oct)', 'default': 0},
@@ -118,9 +110,9 @@ class Decoder(srd.Decoder):
 					addr |= pos
 				elif bitcnt < 10:
 					if bitcnt == 8:
-						oct = addr & 0x07;
-						oct += ((addr >> 3) & 0x07) * 10;
-						oct += ((addr >> 6) & 0x07) * 100;
+						oct = addr & 0x07
+						oct += ((addr >> 3) & 0x07) * 10
+						oct += ((addr >> 6) & 0x07) * 100
 						addr = oct
 						self.put(start, self.samplenum, self.out_ann, [1, ['Addr: %d' % addr, '%d' % addr]])
 						start = self.samplenum
@@ -154,31 +146,31 @@ class Decoder(srd.Decoder):
 									##################################################################
 									if ph_stop < ph_start:
 										ph_stop = self.samplenum
-									_first = self.options['o_start'] - 11
-									_last = self.options['o_stop'] - self.options['o_start']
-									_msb = self.options['o_msb'] == 'MSB'
+									_first = self.options['o_start']
+									_last = self.options['o_stop']
+									_width = _last - _first + 1
 									
-									if _msb:
-										val = self.options['o_value'] / (2**_last)
+									if self.options['o_msb'] == 'MSB':
+										lsbValue = self.options['o_value'] * 2 / (2**_width)
 									else:
-										val = self.options['o_value2']
+										lsbValue = self.options['o_value2']
 										
-									res = data >> _first
 									
-									mask = (2**(_last + 1)) - 1
+									mask = (0xFFFFFFFF >> (32 - (_last - _first + 1)))
+									res = data & mask
 									#self.put(start, self.samplenum, self.out_ann, [8, ['%X' % mask]])
 									
 									if self.options['o_sign'] != 'No Sign':
 										sign = res & (1 << (_last + 1))
 										if self.options['o_sign'] == 'DK':
 											if sign != 0:
-												res = (~(res - 1)) & mask
+												res = (~(res - 1))
 										elif self.options['o_sign'] == 'Sign':
 											res = res & ~(1 << (_last + 1))
 									else:
 										sign = 0
 									#self.put(start, self.samplenum, self.out_ann, [8, ['%X-%d' % (res, res)]])
-									res = res * val
+									res = res * lsbValue
 									
 									if sign != 0:
 										res = -res
