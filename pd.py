@@ -42,8 +42,8 @@ class Decoder(srd.Decoder):
 		{'id': 'o_stop', 'desc': 'Last bit', 'default': 28, 'values': tuple(range(12, 30))},
 		{'id': 'o_sign', 'desc': 'Signed', 'default': 'Unsigned', 'values': ('Unsigned', 'Signed', 'Two’s complement (DK)')},
 		{'id': 'o_msb', 'desc': 'MSB/LSB', 'default': 'MSB', 'values': ('MSB', 'LSB')},
-		{'id': 'o_value', 'desc': 'High order value', 'default': 4096},
-		{'id': 'o_value2', 'desc': 'Low order value', 'default': 1.00},
+		{'id': '0_msbValue', 'desc': 'High order value', 'default': 4096},
+		{'id': '0_lsbValue', 'desc': 'Low order value', 'default': 1.00},
 	)
 
 	def __init__(self):
@@ -132,7 +132,7 @@ class Decoder(srd.Decoder):
 								if cnt == self.options['o_start'] - 11:
 									ph_start = self.samplenum
 								if self.options['o_sign'] != 'Unsigned':
-									if cnt == self.options['o_stop'] - 11 + 1:
+									if cnt == self.options['o_stop'] - 11 + 2:
 										ph_stop = self.samplenum
 								elif cnt == self.options['o_stop'] - 11 + 1:
 									ph_stop = self.samplenum
@@ -148,27 +148,24 @@ class Decoder(srd.Decoder):
 										ph_stop = self.samplenum
 									_first = self.options['o_start']
 									_last = self.options['o_stop']
-									_width = _last - _first + 1
+									_width = _last - _first + 1  # number of significant bits
 									
 									if self.options['o_msb'] == 'MSB':
-										lsbValue = self.options['o_value'] * 2 / (2**_width)
+										lsbValue = self.options['0_msbValue'] * 2 / (2**(_width-1))
 									else:
-										lsbValue = self.options['o_value2']
+										lsbValue = self.options['0_lsbValue']
 										
 									
-									mask = (0xFFFFFFFF >> (32 - (_last - _first + 1)))
-									res = data & mask
-									
+									mask = (2**_width*2-1)
+									data = (data >> (_first-11)) & mask
+									res = data * lsbValue
 									if self.options['o_sign'] != 'Unsigned':
-										sign = res & (1 << (_width-1))
+										sign = data >> _width
 										if sign:
 											if self.options['o_sign'] == 'Two’s complement (DK)':
-												res = (~(res - 1)&mask)* -lsbValue
+												res = (~(data - 1)&mask)* -lsbValue
 											elif self.options['o_sign'] == 'Signed':
-												res = (res & ~(1 << (_width-1)))* -lsbValue
-									else:
-										res = res * lsbValue
-									
+												res = (data & ~(1 << (_width+1)))* -lsbValue
 									##################################################################
 									self.put(ph_start, ph_stop, self.out_ann, [8, ['%f' % res]])
 						start = self.samplenum
