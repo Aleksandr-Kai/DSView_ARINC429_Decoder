@@ -134,30 +134,28 @@ class Decoder(srd.Decoder):
         return Dk
     # **************************************************************
 
-    def decode(self):
+    def decode(self): # execute with stream
         if not self.samplerate:
             raise SamplerateError('Cannot decode without samplerate.')
-        samplerate = float(self.samplerate)
-        ss = self.samplenum
 
-        self.wait([{0: 'r'}, {1: 'r'}])
-        # self.put(0, self.samplenum, self.out_ann, [0, ['s']])
-        p = self.samplenum
-        self.wait([{0: 'f'}, {1: 'f'}])
-        self.put(p, self.samplenum, self.out_ann, [0, ['probe']])
-        halfbit = self.samplenum - p
+        self.wait([{0: 'r'}, {1: 'r'}]) # waiting for rising edge to measure samples per bit
+        probeSemple = self.samplenum # store initial sample of probe
+        self.wait([{0: 'f'}, {1: 'f'}]) # waitin end of high level
+        self.freq = round(1/((self.samplenum - probeSemple)*2 / self.samplerate) / 1000, 1) # arinc frequency
+        self.put(probeSemple, self.samplenum, self.out_ann, [0, ['probe: ' + str(self.freq) + 'kHz']])
+        halfbit = self.samplenum - probeSemple
         bitwidth = halfbit * 2
 
         self.samplenum -= self.samplenum
-        p = 0
+        probeSemple = 0
 
-        while self.samplenum - p < bitwidth * 3:
+        while self.samplenum - probeSemple < bitwidth * 3: # search word spacing (more than 3 periods)
             self.wait({0: 'l', 1: 'l'})
-            p = self.samplenum
+            probeSemple = self.samplenum
             self.wait([{0: 'r'}, {1: 'r'}])
 
         self.samplenum -= halfbit
-        self.put(p, self.samplenum, self.out_ann, [0, ['Start']])
+        self.put(probeSemple, self.samplenum, self.out_ann, [0, ['Start']])
 
         start = 0
         ph_start = 0
@@ -174,7 +172,7 @@ class Decoder(srd.Decoder):
             while bitcnt < 32:
                 (neg, pos) = self.wait([{0: 'h'}, {1: 'h'}])
 
-                if bitcnt < 8:
+                if bitcnt < 8: # read address
                     if bitcnt == 0:
                         start = self.samplenum
                     addr = addr << 1
@@ -253,10 +251,10 @@ class Decoder(srd.Decoder):
                         start = self.samplenum
                     parity = pos
 
-                p = self.samplenum
+                probeSemple = self.samplenum
                 self.wait([{0: 'r'}, {1: 'r'}, {'skip': bitwidth + halfbit}])
-                self.put(p, self.samplenum, self.out_ann, [0, ['%d' % pos]])
-                self.put(p, self.samplenum, self.out_ann,
+                self.put(probeSemple, self.samplenum, self.out_ann, [0, ['%d' % pos]])
+                self.put(probeSemple, self.samplenum, self.out_ann,
                          [7, ['%d' % (bitcnt + 1)]])
 
                 par = 0
