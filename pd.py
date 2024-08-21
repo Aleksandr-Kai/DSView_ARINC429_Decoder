@@ -12,8 +12,10 @@ class SamplerateError(Exception):
 class InternalError(Exception):
     pass
 
+
 homeDir = os.path.expanduser('~')
 defaultConfigPath = os.path.join(homeDir, 'arinc_plugin', 'config.ini')
+
 
 class Decoder(srd.Decoder):
     api_version = 3
@@ -101,17 +103,17 @@ class Decoder(srd.Decoder):
         _width = lastBit - firstBit + 1  # number of significant bits
 
         mask = (2**_width*2-1)
-        data = (data >> (firstBit-11)) & mask
-        res = data * lsbValue
+        _data = (data >> (firstBit-11)) & mask
+        res = _data * lsbValue
         if signBit != Unsigned:
-            sign = data >> _width
+            sign = _data >> _width
             if sign:
                 if signBit == Dk:
-                    res = (~(data - 1) &
+                    res = (~(_data - 1) &
                            mask) * -lsbValue
                 elif signBit == Signed:
                     res = (
-                        data & ~(1 << _width)) * -lsbValue
+                        _data & ~(1 << _width)) * -lsbValue
         self.put(ph_start, ph_stop,
                  self.out_ann, [8, ['%f' % res]])
         return res
@@ -134,22 +136,26 @@ class Decoder(srd.Decoder):
         return Dk
     # **************************************************************
 
-    def decode(self): # execute with stream
+    def decode(self):  # execute with stream
         if not self.samplerate:
             raise SamplerateError('Cannot decode without samplerate.')
 
-        self.wait([{0: 'r'}, {1: 'r'}]) # waiting for rising edge to measure samples per bit
-        probeSemple = self.samplenum # store initial sample of probe
-        self.wait([{0: 'f'}, {1: 'f'}]) # waitin end of high level
-        self.freq = round(1/((self.samplenum - probeSemple)*2 / self.samplerate) / 1000, 1) # arinc frequency
-        self.put(probeSemple, self.samplenum, self.out_ann, [0, ['probe: ' + str(self.freq) + 'kHz']])
+        # waiting for rising edge to measure samples per bit
+        self.wait([{0: 'r'}, {1: 'r'}])
+        probeSemple = self.samplenum  # store initial sample of probe
+        self.wait([{0: 'f'}, {1: 'f'}])  # waitin end of high level
+        self.freq = round(1/((self.samplenum - probeSemple)
+                          * 2 / self.samplerate) / 1000, 1)  # arinc frequency
+        self.put(probeSemple, self.samplenum, self.out_ann,
+                 [0, ['probe: ' + str(self.freq) + 'kHz']])
         halfbit = self.samplenum - probeSemple
         bitwidth = halfbit * 2
 
         self.samplenum -= self.samplenum
         probeSemple = 0
 
-        while self.samplenum - probeSemple < bitwidth * 3: # search word spacing (more than 3 periods)
+        # search word spacing (more than 3 periods)
+        while self.samplenum - probeSemple < bitwidth * 3:
             self.wait({0: 'l', 1: 'l'})
             probeSemple = self.samplenum
             self.wait([{0: 'r'}, {1: 'r'}])
@@ -157,6 +163,7 @@ class Decoder(srd.Decoder):
         self.samplenum -= halfbit
         self.put(probeSemple, self.samplenum, self.out_ann, [0, ['Start']])
 
+        # word_start = 0
         start = 0
         ph_start = 0
         ph_stop = 0
@@ -164,6 +171,7 @@ class Decoder(srd.Decoder):
         while True:
             bitcnt = 0
             addr = 0
+            raw_addr = 0
             id = 0
             data = 0
             matrix = 0
@@ -172,9 +180,10 @@ class Decoder(srd.Decoder):
             while bitcnt < 32:
                 (neg, pos) = self.wait([{0: 'h'}, {1: 'h'}])
 
-                if bitcnt < 8: # read address
+                if bitcnt < 8:  # read address
                     if bitcnt == 0:
                         start = self.samplenum
+                        # word_start = self.samplenum
                     addr = addr << 1
                     addr |= pos
                 elif bitcnt < 10:
@@ -182,6 +191,7 @@ class Decoder(srd.Decoder):
                         oct = addr & 0x07
                         oct += ((addr >> 3) & 0x07) * 10
                         oct += ((addr >> 6) & 0x07) * 100
+                        raw_addr = addr
                         addr = oct
                         self.put(start, self.samplenum, self.out_ann, [
                                  1, ['Addr: %d' % addr, '%d' % addr]])
@@ -262,14 +272,16 @@ class Decoder(srd.Decoder):
 
                 probeSemple = self.samplenum
                 self.wait([{0: 'r'}, {1: 'r'}, {'skip': bitwidth + halfbit}])
-                self.put(probeSemple, self.samplenum, self.out_ann, [0, ['%d' % pos]])
+                self.put(probeSemple, self.samplenum,
+                         self.out_ann, [0, ['%d' % pos]])
                 self.put(probeSemple, self.samplenum, self.out_ann,
                          [7, ['%d' % (bitcnt + 1)]])
 
                 par = 0
                 if bitcnt == 31:
-                    while addr > 0:
-                        addr &= (addr-1)
+                    # self.put(word_start, self.samplenum, self.out_ann, [8, ['%X/%X/%X/%X/%X' % (raw_addr,id,data,matrix,parity)]])
+                    while raw_addr > 0:
+                        raw_addr &= (raw_addr-1)
                         par += 1
                     while id > 0:
                         id &= (id-1)
@@ -280,9 +292,10 @@ class Decoder(srd.Decoder):
                     while matrix > 0:
                         matrix &= (matrix-1)
                         par += 1
+                    par += parity
 
                     par = par % 2
-                    if ((par == 0) and (parity != 0)) or ((par != 0) and (parity == 0)):
+                    if (par != 0):
                         par = 'Er'
                     else:
                         par = 'Ok'
