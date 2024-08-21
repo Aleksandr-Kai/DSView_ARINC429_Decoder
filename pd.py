@@ -232,8 +232,17 @@ class Decoder(srd.Decoder):
                                 value = self.calcValue(data, ph_start, ph_stop, self.currentParam[keyFirstBit], self.currentParam[
                                     keyLastBit], self.currentParam[keySignBit], self.currentParam[keyLsbValue])
                                 if self.config[keySave]:
+                                    if self.currentParam[keyTimeInterval] == 0:
+                                        if self.currentParam[keyTimestamp] == 0:
+                                            self.currentParam[keyTimestamp] = self.samplenum / \
+                                                self.samplerate
+                                        else:
+                                            self.currentParam[keyTimeInterval] = self.samplenum / \
+                                                self.samplerate - \
+                                                self.currentParam[keyTimestamp]
+                                    self.currentParam[keyTimestamp] += self.currentParam[keyTimeInterval]
                                     self.saver.writeRow(self.currentParam[keyName], [
-                                                        self.samplenum/self.samplerate, value])
+                                                        self.currentParam[keyTimestamp], value])
                             else:
                                 if self.options['o_addr'] == addr:
                                     if (self.options['o_id'] == 'Ignore') or (self.options['o_id'] == str(id)):
@@ -305,6 +314,8 @@ keyLastBit = 'last'
 keySignBit = 'sign'
 keyLsbValue = 'lsb'
 keyParameters = 'params'
+keyTimeInterval = 'interval'
+keyTimestamp = 'timestamp'
 
 Unsigned = 'unsigned'
 Signed = 'signed'
@@ -363,6 +374,8 @@ def getConfig(path=defaultConfigPath):
     for param in param_names:
         prm = {}
         prm[keyName] = param
+        prm[keyTimeInterval] = 0
+        prm[keyTimestamp] = 0
 
         try:
             prm[keyAddr] = int(ini[param][param_addr_key])
