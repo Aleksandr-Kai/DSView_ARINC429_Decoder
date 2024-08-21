@@ -16,6 +16,7 @@ class InternalError(Exception):
 homeDir = os.path.expanduser('~')
 defaultConfigPath = os.path.join(homeDir, 'arinc_plugin', 'config.ini')
 
+annBits, annAddr, annId, annData, annMatrix, annParity, annPause, annBitNum, annValue = range(9)
 
 class Decoder(srd.Decoder):
     api_version = 3
@@ -31,6 +32,7 @@ class Decoder(srd.Decoder):
         {'id': 'neg', 'name': '"0"', 'desc': '0', 'default': 5},
         {'id': 'pos', 'name': '"1"', 'desc': '1', 'default': 6},
     )
+
     annotations = (
         ('ann_bit', 'Bit'),
         ('ann_addr', 'Addr'),
@@ -43,10 +45,10 @@ class Decoder(srd.Decoder):
         ('ann_phys', 'Value'),
     )
     annotation_rows = (
-        ('annr_inf', 'Bit num', (7,)),
-        ('annr_bits', 'Bits', (0,)),
-        ('annr_struct', 'Struct', (1, 2, 3, 4, 5, 6)),
-        ('annr_phys', 'Value', (8,)),
+        ('annr_inf', 'Bit num', (annBitNum,)),
+        ('annr_bits', 'Bits', (annBits,)),
+        ('annr_struct', 'Struct', (annAddr, annId, annData, annMatrix, annParity, annPause)),
+        ('annr_phys', 'Value', (annValue,)),
     )
     options = (
         {'id': 'o_calc', 'desc': 'Calc value',
@@ -114,8 +116,7 @@ class Decoder(srd.Decoder):
                 elif signBit == Signed:
                     res = (
                         _data & ~(1 << _width)) * -lsbValue
-        self.put(ph_start, ph_stop,
-                 self.out_ann, [8, ['%f' % res]])
+        self.put(ph_start, ph_stop, self.out_ann, [annValue, ['%f' % res]])
         return res
 
     def getLsbOption(self):
@@ -147,7 +148,7 @@ class Decoder(srd.Decoder):
         self.freq = round(1/((self.samplenum - probeSemple)
                           * 2 / self.samplerate) / 1000, 1)  # arinc frequency
         self.put(probeSemple, self.samplenum, self.out_ann,
-                 [0, ['probe: ' + str(self.freq) + 'kHz']])
+                 [annBits, ['probe: ' + str(self.freq) + 'kHz']])
         halfbit = self.samplenum - probeSemple
         bitwidth = halfbit * 2
 
@@ -161,7 +162,7 @@ class Decoder(srd.Decoder):
             self.wait([{0: 'r'}, {1: 'r'}])
 
         self.samplenum -= halfbit
-        self.put(probeSemple, self.samplenum, self.out_ann, [0, ['Start']])
+        self.put(probeSemple, self.samplenum, self.out_ann, [annBits, ['Start']])
 
         # word_start = 0
         start = 0
@@ -193,16 +194,14 @@ class Decoder(srd.Decoder):
                         oct += ((addr >> 6) & 0x07) * 100
                         raw_addr = addr
                         addr = oct
-                        self.put(start, self.samplenum, self.out_ann, [
-                                 1, ['Addr: %d' % addr, '%d' % addr]])
+                        self.put(start, self.samplenum, self.out_ann, [annAddr, ['Addr: %d' % addr, '%d' % addr]])
                         start = self.samplenum
                         cnt = 0
                     id |= pos << cnt
                     cnt += 1
                 elif bitcnt < 29:
                     if bitcnt == 10:
-                        self.put(start, self.samplenum, self.out_ann,
-                                 [2, ['ID: %d' % id, '%d' % id]])
+                        self.put(start, self.samplenum, self.out_ann, [annId, ['ID: %d' % id, '%d' % id]])
                         start = self.samplenum
                         cnt = 0
                     data |= pos << cnt
@@ -232,8 +231,7 @@ class Decoder(srd.Decoder):
                     cnt += 1
                 elif bitcnt < 31:
                     if bitcnt == 29:
-                        self.put(start, self.samplenum, self.out_ann, [
-                                 3, ['Data: 0x%X' % data, '%X' % data]])
+                        self.put(start, self.samplenum, self.out_ann, [annData, ['Data: 0x%X' % data, '%X' % data]])
                         ##################################################################
                         if self.options['o_calc'] == 'Yes':
                             if ph_stop < ph_start:
@@ -265,21 +263,18 @@ class Decoder(srd.Decoder):
                     cnt += 1
                 else:
                     if bitcnt == 31:
-                        self.put(start, self.samplenum, self.out_ann, [
-                                 4, ['M: %d' % matrix, '%d' % matrix]])
+                        self.put(start, self.samplenum, self.out_ann, [annMatrix, ['M: %d' % matrix, '%d' % matrix]])
                         start = self.samplenum
                     parity = pos
 
                 probeSemple = self.samplenum
                 self.wait([{0: 'r'}, {1: 'r'}, {'skip': bitwidth + halfbit}])
-                self.put(probeSemple, self.samplenum,
-                         self.out_ann, [0, ['%d' % pos]])
-                self.put(probeSemple, self.samplenum, self.out_ann,
-                         [7, ['%d' % (bitcnt + 1)]])
+                self.put(probeSemple, self.samplenum, self.out_ann, [annBits, ['%d' % pos]])
+                self.put(probeSemple, self.samplenum, self.out_ann, [annBitNum, ['%d' % (bitcnt + 1)]])
 
                 par = 0
                 if bitcnt == 31:
-                    # self.put(word_start, self.samplenum, self.out_ann, [8, ['%X/%X/%X/%X/%X' % (raw_addr,id,data,matrix,parity)]])
+                    # self.put(word_start, self.samplenum, self.out_ann, [annValue, ['%X/%X/%X/%X/%X' % (raw_addr,id,data,matrix,parity)]])
                     while raw_addr > 0:
                         raw_addr &= (raw_addr-1)
                         par += 1
@@ -299,8 +294,7 @@ class Decoder(srd.Decoder):
                         par = 'Er'
                     else:
                         par = 'Ok'
-                    self.put(start, self.samplenum, self.out_ann,
-                             [5, ['P: %s' % par, '%s' % par]])
+                    self.put(start, self.samplenum, self.out_ann,[annParity, ['P: %s' % par, '%s' % par]])
                     self.currentParam = None
                 bitcnt += 1
 
