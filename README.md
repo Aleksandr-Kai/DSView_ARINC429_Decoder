@@ -16,3 +16,5 @@ You can configure the decoding parameters of several parameters in the config.in
 ![example](screenshots/3.png)
 
 config.ini is located at `<user folder>/arinc_plugin/config.ini`
+
+[on GitLab](https://gitlab.com/Aleksandr-Kai/DSView_ARINC429_Decoder)
