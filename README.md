@@ -17,4 +17,4 @@ You can configure the decoding parameters of several parameters in the config.in
 
 config.ini is located at `<user folder>/arinc_plugin/config.ini`
 
-[on GitLab](https://gitlab.com/Aleksandr-Kai/DSView_ARINC429_Decoder)
+[on GitLab](https://gitlab.com/Aleksandr-Kai/DSView_ARINC429_Decoder) (forcing to turn on 2fa sucks. ms will kill github)
