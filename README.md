@@ -11,7 +11,7 @@ Copy pd.py to _/usr/local/share/libsigrokdecode4DSL/decoders/arinc_. And create 
 
 ![example](screenshots/2.png)
 
-You can configure the decoding parameters of several parameters in the config.ini configuration file and save the result in .csv files
+You can configure the decoding parameters of several parameters in the config.ini (will be created in _<user_home>/arinc_plugin/_ after clicking Ok with the "Use config" option selected) configuration file and save the result in .csv files
 
 ![example](screenshots/3.png)
 
